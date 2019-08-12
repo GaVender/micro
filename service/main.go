@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"log"
-	"net"
 
 	pb "github.com/GaVender/micro/proto/consignment"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
+	micro "github.com/micro/go-micro"
 )
 
 const (
@@ -36,20 +34,23 @@ type service struct {
 	repo IRepository
 }
 
-func (s *service) CreateConsignment(ctx context.Context, req *pb.Consignment) (*pb.Response, error) {
+func (s *service) CreateConsignment(ctx context.Context, req *pb.Consignment, res *pb.Response) error {
 	consignment, err := s.repo.Create(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &pb.Response{Created: true, Consignment: consignment}, nil
+	res.Created = true
+	res.Consignment = consignment
+	return nil
 }
 
-func (s *service) GetAll(context.Context, *pb.EmptyRequest) (*pb.Response, error) {
-	return &pb.Response{Consignments: s.repo.GetAll()}, nil
+func (s *service) GetAll(c context.Context, req *pb.EmptyRequest, res *pb.Response) error {
+	res.Consignments = s.repo.GetAll()
+	return nil
 }
 
 func main() {
-	lis, err := net.Listen("tcp", port)
+	/*lis, err := net.Listen("tcp", port)
 	if err != nil {
 		panic(err)
 	}
@@ -62,5 +63,16 @@ func main() {
 	log.Println("grpc serve...")
 	if err := s.Serve(lis); err != nil {
 		panic(err)
+	}*/
+
+	repo := &Repository{}
+	srv := micro.NewService(
+		micro.Name("go.micro.srv.consignment"),
+		micro.Version("latest"),
+		)
+	srv.Init()
+	pb.RegisterShippingServiceHandler(srv.Server(), &service{repo})
+	if err := srv.Run(); err != nil {
+		log.Println(err)
 	}
 }

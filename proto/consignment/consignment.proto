@@ -1,4 +1,5 @@
-// protoc.exe -I . --go_out=plugins=grpc:. consignment.proto
+// gprc构建, cmd：protoc.exe -I . --go_out=plugins=grpc:. consignment.proto
+// micro构建，cmd：protoc.exe -I . --go_out=plugins=micro:. consignment.proto
 
 syntax = "proto3";
 
