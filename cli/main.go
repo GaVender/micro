@@ -34,6 +34,7 @@ func parseFile(file string) (*pb.Consignment, error) {
 func main() {
 	cmd.Init()
 	client := pb.NewShippingServiceClient("go.micro.srv.consignment", microClient.DefaultClient)
+
 	file := defaultFileName
 	if len(os.Args) > 1 {
 		file = os.Args[1]

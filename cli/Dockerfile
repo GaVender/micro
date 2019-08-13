@@ -3,7 +3,7 @@ FROM alpine:latest
 RUN mkdir -p /app
 WORKDIR /app
 
-ADD consignment.json /app/consignment.json
-ADD cli /app/cli
+COPY consignment.json .
+COPY cli .
 
 CMD ["./cli"]
