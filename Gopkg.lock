@@ -10,6 +10,14 @@
   revision = "ec5e00d3c878b2a97bbe0884ef45ffd1b4f669f5"
 
 [[projects]]
+  digest = "1:f438d91be142877c3ad83157992c91de787ddfbddcc2a7da1ef6ef61606cadc4"
+  name = "github.com/cheekybits/genny"
+  packages = ["generic"]
+  pruneopts = "UT"
+  revision = "d2cf3cdd35ce0d789056c4bc02a4d6349c947caf"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:4be5d1a52c61b74c0a4d62f37c0640f706ae6e07eb73617dd013990d565717d5"
   name = "github.com/go-log/log"
   packages = [
@@ -152,6 +160,34 @@
   version = "v1.1.7"
 
 [[projects]]
+  digest = "1:c94ad847db2cd5973a67688dbf6b617e717669055e82b10fb8d69838bdfce598"
+  name = "github.com/lucas-clemente/quic-go"
+  packages = [
+    ".",
+    "internal/ackhandler",
+    "internal/congestion",
+    "internal/flowcontrol",
+    "internal/handshake",
+    "internal/protocol",
+    "internal/qerr",
+    "internal/utils",
+    "internal/wire",
+    "quictrace",
+    "quictrace/pb",
+  ]
+  pruneopts = "UT"
+  revision = "df82f9ca2f5cd164a30e2a22855044358d1e842c"
+  version = "v0.12.0"
+
+[[projects]]
+  digest = "1:5d84bb9ed93b2e31476f40dfe99deddc8b7f6761b5dd7cd87fa860d2f0c0644c"
+  name = "github.com/marten-seemann/qtls"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "b9a6d268fd17456b2232ed5f6e03f85d89860984"
+  version = "v0.3.2"
+
+[[projects]]
   digest = "1:42deff47d28e82eddbcbcdb3bdd84acab83f220aef58d8f22b64a96bc6344cd1"
   name = "github.com/micro/cli"
   packages = ["."]
@@ -160,7 +196,7 @@
   version = "v0.2.0"
 
 [[projects]]
-  digest = "1:703bd2bf0141b2bd21f9ed63e8d398f5d63805b278a8d14cb8113272c0aa8a58"
+  digest = "1:219c614fb88486723b2a33300ff3d00101fe765e1a2e5cc0859ee877a9477f5e"
   name = "github.com/micro/go-micro"
   packages = [
     ".",
@@ -171,7 +207,11 @@
     "client",
     "client/grpc",
     "client/mucp",
-    "cmd",
+    "client/pool",
+    "client/selector",
+    "client/selector/dns",
+    "client/selector/router",
+    "client/selector/static",
     "codec",
     "codec/bytes",
     "codec/grpc",
@@ -179,6 +219,9 @@
     "codec/jsonrpc",
     "codec/proto",
     "codec/protorpc",
+    "config/cmd",
+    "debug/handler",
+    "debug/proto",
     "errors",
     "metadata",
     "registry",
@@ -188,12 +231,9 @@
     "registry/gossip/proto",
     "registry/mdns",
     "registry/memory",
-    "selector",
-    "selector/dns",
-    "selector/static",
+    "router",
+    "router/proto",
     "server",
-    "server/debug",
-    "server/debug/proto",
     "server/grpc",
     "server/mucp",
     "transport",
@@ -201,31 +241,34 @@
     "transport/grpc/proto",
     "transport/http",
     "transport/memory",
+    "transport/quic",
     "util/addr",
+    "util/buf",
     "util/grpc",
     "util/log",
     "util/net",
+    "util/socket",
     "util/tls",
   ]
   pruneopts = "UT"
-  revision = "4aa0192ebae9fe68686dea839c7a5ff288529efd"
-  version = "v1.7.0"
+  revision = "ac2a5a04a2d034c5034c507c0b6b534c6a97b87b"
+  version = "v1.9.1"
 
 [[projects]]
-  digest = "1:68ad76c08287371e8e848e4676f3eb3c02b4870d31766c8e1f747f42dad858fc"
+  digest = "1:04c25bbbd6aee780b48b01047696dc6e8b8ffa272d4f68df991e6afad640b9ae"
   name = "github.com/micro/mdns"
   packages = ["."]
   pruneopts = "UT"
-  revision = "ef68c9635478c8898c167c712edfe5ae37fa0772"
-  version = "v0.2.0"
+  revision = "9cac7778d08d8e30f6aa4b10378002d5146ee568"
+  version = "v0.3.0"
 
 [[projects]]
-  digest = "1:66def2f80d5127123c81ffa876242c12d3b7b06188f6645d79b3cc4acba637b3"
+  digest = "1:554af29db5f8e97dd01a8d5a3944c6cc3e91a2578a4ae14408d48cb179557e45"
   name = "github.com/miekg/dns"
   packages = ["."]
   pruneopts = "UT"
-  revision = "b13675009d59c97f3721247d9efa8914e1866a5b"
-  version = "v1.1.15"
+  revision = "c67445656579a3c3836047c509073f97022da0ed"
+  version = "v1.1.16"
 
 [[projects]]
   digest = "1:5d231480e1c64a726869bc4142d270184c419749d34f167646baa21008eb0a79"
@@ -321,18 +364,26 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:cd7e85fc3687e062714febdee3e8efeb00a413a2a620d28908fd0258261d2353"
+  digest = "1:27b8b79026e48388d6c558959104c85b05eee5cd57ec863f4fa7983eb3908eb0"
   name = "golang.org/x/crypto"
   packages = [
+    "chacha20poly1305",
+    "cryptobyte",
+    "cryptobyte/asn1",
+    "curve25519",
     "ed25519",
     "ed25519/internal/edwards25519",
+    "hkdf",
+    "internal/chacha20",
+    "internal/subtle",
+    "poly1305",
   ]
   pruneopts = "UT"
-  revision = "4def268fd1a49955bfb3dda92fe3db4f924f2285"
+  revision = "60c769a6c58655dab1b9adac0d58967dd517cfba"
 
 [[projects]]
   branch = "master"
-  digest = "1:c8e986ba01cb5297389e19d62622ed647324dadd084316bc8e5d9db58068e508"
+  digest = "1:85ebcfb82dae8c2ad84461cfab57b4cd94cd3a989991e2e6895a19d26f9b4088"
   name = "golang.org/x/net"
   packages = [
     "bpf",
@@ -350,18 +401,19 @@
     "trace",
   ]
   pruneopts = "UT"
-  revision = "ca1201d0de80cfde86cb01aea620983605dfe99b"
+  revision = "74dc4d7220e7acc4e100824340f3e66577424772"
 
 [[projects]]
   branch = "master"
-  digest = "1:689d11c3e6d3df8a1e2d2ad5a494ea99659d09faf706472bdd64cac7ac5f6887"
+  digest = "1:6c97b4baa9cf774b42192e23632afc7dee7b899d4a3dc98057d24708ce1f60ac"
   name = "golang.org/x/sys"
   packages = [
+    "cpu",
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "9eafafc0a87e0fd0aeeba439a4573537970c44c7"
+  revision = "fde4db37ae7ad8191b03d30d27f258b5291ae4e3"
 
 [[projects]]
   digest = "1:8d8faad6b12a3a4c819a3f9618cb6ee1fa1cfc33253abeeea8b55336721e3405"
@@ -394,10 +446,10 @@
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
   pruneopts = "UT"
-  revision = "fa694d86fc64c7654a660f8908de4e879866748d"
+  revision = "24fa4b261c55da65468f2abfdae2b024eef27dfb"
 
 [[projects]]
-  digest = "1:581c9b0fe9354faf730ff231cf3682089e0b703073cf10e3976219609d27a9ea"
+  digest = "1:3b97661db2e5d4c87f7345e875ea28f911e54c715ba0a74be08e1649d67e05cd"
   name = "google.golang.org/grpc"
   packages = [
     ".",
@@ -435,8 +487,22 @@
     "tap",
   ]
   pruneopts = "UT"
-  revision = "045159ad57f3781d409358e3ade910a018c16b30"
-  version = "v1.22.1"
+  revision = "6eaf6f47437a6b4e2153a190160ef39a92c7eceb"
+  version = "v1.23.0"
+
+[[projects]]
+  branch = "v2"
+  digest = "1:4af24de1cba937fb5ef082e8860a47fd46282e6863c01930359368ee121e3114"
+  name = "gopkg.in/mgo.v2"
+  packages = [
+    ".",
+    "bson",
+    "internal/json",
+    "internal/sasl",
+    "internal/scram",
+  ]
+  pruneopts = "UT"
+  revision = "a6b53ec6cb22a3699387a57a161566f9402ee85b"
 
 [solve-meta]
   analyzer-name = "dep"
@@ -445,9 +511,10 @@
     "github.com/golang/protobuf/proto",
     "github.com/micro/go-micro",
     "github.com/micro/go-micro/client",
-    "github.com/micro/go-micro/cmd",
     "github.com/micro/go-micro/server",
     "golang.org/x/net/context",
+    "gopkg.in/mgo.v2",
+    "gopkg.in/mgo.v2/bson",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

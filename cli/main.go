@@ -7,17 +7,17 @@ import (
 	"log"
 	"os"
 
-	pb "github.com/GaVender/micro/proto/consignment"
+	pbConsignment "github.com/GaVender/micro/proto/consignment"
+	pbVessel "github.com/GaVender/micro/proto/vessel"
 	microClient "github.com/micro/go-micro/client"
-	"github.com/micro/go-micro/cmd"
 )
 
 const (
 	defaultFileName = "consignment.json"
 )
 
-func parseFile(file string) (*pb.Consignment, error) {
-	var consignment pb.Consignment
+func parseFile(file string) (*pbConsignment.Consignment, error) {
+	var consignment pbConsignment.Consignment
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		log.Println(err)
@@ -32,8 +32,19 @@ func parseFile(file string) (*pb.Consignment, error) {
 }
 
 func main() {
-	cmd.Init()
-	client := pb.NewShippingServiceClient("go.micro.srv.consignment", microClient.DefaultClient)
+	vesselClient := pbVessel.NewVesselServiceClient("go.micro.srv.vessel", microClient.DefaultClient)
+	respVessel, err := vesselClient.Create(context.Background(), &pbVessel.Vessel{
+		Id: "vessel001",
+		Name: "Kane's Salty Secret",
+		MaxWeight: 200000,
+		Capacity: 500,
+	})
+	if err != nil {
+		panic(err)
+	}
+	log.Println(respVessel)
+
+	consignmentClient := pbConsignment.NewShippingServiceClient("go.micro.srv.consignment", microClient.DefaultClient)
 
 	file := defaultFileName
 	if len(os.Args) > 1 {
@@ -45,13 +56,13 @@ func main() {
 		panic(consignment)
 	}
 
-	r, err := client.CreateConsignment(context.Background(), consignment)
+	consignmentResp, err := consignmentClient.CreateConsignment(context.Background(), consignment)
 	if err != nil {
 		panic(err)
 	}
-	log.Println(r)
+	log.Println(consignmentResp)
 
-	getAll, err := client.GetAll(context.Background(), &pb.EmptyRequest{})
+	getAll, err := consignmentClient.GetAll(context.Background(), &pbConsignment.EmptyRequest{})
 	if err != nil {
 		log.Fatalf("Could not list consignments: %v", err)
 	}

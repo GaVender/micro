@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -17,6 +18,8 @@ import (
 	"github.com/micro/go-micro/transport"
 	"github.com/micro/go-micro/util/addr"
 	log "github.com/micro/go-micro/util/log"
+	mnet "github.com/micro/go-micro/util/net"
+	"github.com/micro/go-micro/util/socket"
 )
 
 type rpcServer struct {
@@ -68,10 +71,25 @@ func (s *rpcServer) ServeConn(sock transport.Socket) {
 		}
 	}()
 
+	// multiplex the streams on a single socket by Micro-Stream
+	var mtx sync.RWMutex
+	sockets := make(map[string]*socket.Socket)
+
 	for {
 		var msg transport.Message
 		if err := sock.Recv(&msg); err != nil {
 			return
+		}
+
+		// use Micro-Stream as the stream identifier
+		// in the event its blank we'll always process
+		// on the same socket
+		id := msg.Header["Micro-Stream"]
+
+		// if there's no stream id then its a standard request
+		// use the Micro-Id
+		if len(id) == 0 {
+			id = msg.Header["Micro-Id"]
 		}
 
 		// add to wait group if "wait" is opt-in
@@ -79,12 +97,73 @@ func (s *rpcServer) ServeConn(sock transport.Socket) {
 			s.wg.Add(1)
 		}
 
+		// check we have an existing socket
+		mtx.RLock()
+		psock, ok := sockets[id]
+		mtx.RUnlock()
+
+		// got the socket
+		if ok {
+			// accept the message
+			if err := psock.Accept(&msg); err != nil {
+				// delete the socket
+				mtx.Lock()
+				delete(sockets, id)
+				mtx.Unlock()
+			}
+
+			// done(1)
+			if s.wg != nil {
+				s.wg.Done()
+			}
+
+			// continue to the next message
+			continue
+		}
+
+		// no socket was found
+		psock = socket.New()
+		psock.SetLocal(sock.Local())
+		psock.SetRemote(sock.Remote())
+
+		// load the socket
+		psock.Accept(&msg)
+
+		// save a new socket
+		mtx.Lock()
+		sockets[id] = psock
+		mtx.Unlock()
+
+		// process the outbound messages from the socket
+		go func(id string, psock *socket.Socket) {
+			defer psock.Close()
+
+			for {
+				// get the message from our internal handler/stream
+				m := new(transport.Message)
+				if err := psock.Process(m); err != nil {
+					// delete the socket
+					mtx.Lock()
+					delete(sockets, id)
+					mtx.Unlock()
+					return
+				}
+
+				// send the message back over the socket
+				if err := sock.Send(m); err != nil {
+					return
+				}
+			}
+		}(id, psock)
+
+		// now walk the usual path
+
 		// we use this Timeout header to set a server deadline
 		to := msg.Header["Timeout"]
 		// we use this Content-Type header to identify the codec needed
 		ct := msg.Header["Content-Type"]
 
-		// strip our headers
+		// copy the message headers
 		hdr := make(map[string]string)
 		for k, v := range msg.Header {
 			hdr[k] = v
@@ -94,17 +173,17 @@ func (s *rpcServer) ServeConn(sock transport.Socket) {
 		hdr["Local"] = sock.Local()
 		hdr["Remote"] = sock.Remote()
 
-		// create new context
+		// create new context with the metadata
 		ctx := metadata.NewContext(context.Background(), hdr)
 
-		// set the timeout if we have it
+		// set the timeout from the header if we have it
 		if len(to) > 0 {
 			if n, err := strconv.ParseUint(to, 10, 64); err == nil {
 				ctx, _ = context.WithTimeout(ctx, time.Duration(n))
 			}
 		}
 
-		// no content type
+		// if there's no content type default it
 		if len(ct) == 0 {
 			msg.Header["Content-Type"] = DefaultContentType
 			ct = DefaultContentType
@@ -131,7 +210,13 @@ func (s *rpcServer) ServeConn(sock transport.Socket) {
 			}
 		}
 
-		rcodec := newRpcCodec(&msg, sock, cf)
+		rcodec := newRpcCodec(&msg, psock, cf)
+
+		// check stream id
+		var stream bool
+		if v := getHeader("Micro-Stream", msg.Header); len(v) > 0 {
+			stream = true
+		}
 
 		// internal request
 		request := &rpcRequest{
@@ -142,14 +227,14 @@ func (s *rpcServer) ServeConn(sock transport.Socket) {
 			codec:       rcodec,
 			header:      msg.Header,
 			body:        msg.Body,
-			socket:      sock,
-			stream:      true,
+			socket:      psock,
+			stream:      stream,
 		}
 
 		// internal response
 		response := &rpcResponse{
 			header: make(map[string]string),
-			socket: sock,
+			socket: psock,
 			codec:  rcodec,
 		}
 
@@ -172,28 +257,34 @@ func (s *rpcServer) ServeConn(sock transport.Socket) {
 			r = rpcRouter{handler}
 		}
 
-		// serve the actual request using the request router
-		if err := r.ServeRequest(ctx, request, response); err != nil {
-			// write an error response
-			err = rcodec.Write(&codec.Message{
-				Header: msg.Header,
-				Error:  err.Error(),
-				Type:   codec.Error,
-			}, nil)
-			// could not write the error response
-			if err != nil {
-				log.Logf("rpc: unable to write error response: %v", err)
+		// serve the request in a go routine as this may be a stream
+		go func(id string, psock *socket.Socket) {
+			// serve the actual request using the request router
+			if err := r.ServeRequest(ctx, request, response); err != nil {
+				// write an error response
+				err = rcodec.Write(&codec.Message{
+					Header: msg.Header,
+					Error:  err.Error(),
+					Type:   codec.Error,
+				}, nil)
+
+				// could not write the error response
+				if err != nil {
+					log.Logf("rpc: unable to write error response: %v", err)
+				}
 			}
+
+			mtx.Lock()
+			delete(sockets, id)
+			mtx.Unlock()
+
+			// signal we're done
 			if s.wg != nil {
 				s.wg.Done()
 			}
-			return
-		}
 
-		// done
-		if s.wg != nil {
-			s.wg.Done()
-		}
+		}(id, psock)
+
 	}
 }
 
@@ -277,10 +368,11 @@ func (s *rpcServer) Subscribe(sb Subscriber) error {
 }
 
 func (s *rpcServer) Register() error {
+	var err error
+	var advt, host, port string
+
 	// parse address for host, port
 	config := s.Options()
-	var advt, host string
-	var port int
 
 	// check the advertise address first
 	// if it exists then use it, otherwise
@@ -291,12 +383,14 @@ func (s *rpcServer) Register() error {
 		advt = config.Address
 	}
 
-	parts := strings.Split(advt, ":")
-	if len(parts) > 1 {
-		host = strings.Join(parts[:len(parts)-1], ":")
-		port, _ = strconv.Atoi(parts[len(parts)-1])
+	if cnt := strings.Count(advt, ":"); cnt >= 1 {
+		// ipv6 address in format [host]:port or ipv4 host:port
+		host, port, err = net.SplitHostPort(advt)
+		if err != nil {
+			return err
+		}
 	} else {
-		host = parts[0]
+		host = advt
 	}
 
 	addr, err := addr.Extract(host)
@@ -310,11 +404,15 @@ func (s *rpcServer) Register() error {
 		md[k] = v
 	}
 
+	// mq-rpc(eg. nats) doesn't need the port. its addr is queue name.
+	if port != "" {
+		addr = mnet.HostPort(addr, port)
+	}
+
 	// register service
 	node := &registry.Node{
 		Id:       config.Name + "-" + config.Id,
 		Address:  addr,
-		Port:     port,
 		Metadata: md,
 	}
 
@@ -406,6 +504,7 @@ func (s *rpcServer) Register() error {
 		if err != nil {
 			return err
 		}
+		log.Logf("Subscribing %s to topic: %s", node.Id, sub.Topic())
 		s.subscribers[sb] = []broker.Subscriber{sub}
 	}
 
@@ -413,9 +512,10 @@ func (s *rpcServer) Register() error {
 }
 
 func (s *rpcServer) Deregister() error {
+	var err error
+	var advt, host, port string
+
 	config := s.Options()
-	var advt, host string
-	var port int
 
 	// check the advertise address first
 	// if it exists then use it, otherwise
@@ -426,12 +526,14 @@ func (s *rpcServer) Deregister() error {
 		advt = config.Address
 	}
 
-	parts := strings.Split(advt, ":")
-	if len(parts) > 1 {
-		host = strings.Join(parts[:len(parts)-1], ":")
-		port, _ = strconv.Atoi(parts[len(parts)-1])
+	if cnt := strings.Count(advt, ":"); cnt >= 1 {
+		// ipv6 address in format [host]:port or ipv4 host:port
+		host, port, err = net.SplitHostPort(advt)
+		if err != nil {
+			return err
+		}
 	} else {
-		host = parts[0]
+		host = advt
 	}
 
 	addr, err := addr.Extract(host)
@@ -439,10 +541,14 @@ func (s *rpcServer) Deregister() error {
 		return err
 	}
 
+	// mq-rpc(eg. nats) doesn't need the port. its addr is queue name.
+	if port != "" {
+		addr = mnet.HostPort(addr, port)
+	}
+
 	node := &registry.Node{
 		Id:      config.Name + "-" + config.Id,
 		Address: addr,
-		Port:    port,
 	}
 
 	service := &registry.Service{
@@ -467,7 +573,7 @@ func (s *rpcServer) Deregister() error {
 
 	for sb, subs := range s.subscribers {
 		for _, sub := range subs {
-			log.Logf("Unsubscribing from topic: %s", sub.Topic())
+			log.Logf("Unsubscribing %s from topic: %s", node.Id, sub.Topic())
 			sub.Unsubscribe()
 		}
 		s.subscribers[sb] = nil
@@ -478,7 +584,6 @@ func (s *rpcServer) Deregister() error {
 }
 
 func (s *rpcServer) Start() error {
-	registerDebugHandler(s)
 	config := s.Options()
 
 	// start listening on the transport
@@ -500,7 +605,9 @@ func (s *rpcServer) Start() error {
 		return err
 	}
 
-	log.Logf("Broker [%s] Connected to %s", config.Broker.String(), config.Broker.Address())
+	bname := config.Broker.String()
+
+	log.Logf("Broker [%s] Connected to %s", bname, config.Broker.Address())
 
 	// use RegisterCheck func before register
 	if err = s.opts.RegisterCheck(s.opts.Context); err != nil {
